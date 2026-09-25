@@ -296,6 +296,72 @@ AUDIO_CLEANUP_SCRIPT = """
 })();
 """
 
+# Keep background media playback active and prevent auto-pause on window blur/tab switch
+BACKGROUND_PLAYBACK_SCRIPT = """
+(function() {
+    try {
+        if (typeof document !== 'undefined') {
+            try {
+                Object.defineProperty(Document.prototype, 'visibilityState', {
+                    get: function() { return 'visible'; },
+                    configurable: true
+                });
+                Object.defineProperty(Document.prototype, 'hidden', {
+                    get: function() { return false; },
+                    configurable: true
+                });
+                Document.prototype.hasFocus = function() { return true; };
+            } catch(e) {}
+
+            try {
+                Object.defineProperty(document, 'visibilityState', {
+                    get: function() { return 'visible'; },
+                    configurable: true
+                });
+                Object.defineProperty(document, 'hidden', {
+                    get: function() { return false; },
+                    configurable: true
+                });
+                document.hasFocus = function() { return true; };
+            } catch(e) {}
+
+            try {
+                Object.defineProperty(document, 'onvisibilitychange', {
+                    get: function() { return null; },
+                    set: function() {},
+                    configurable: true
+                });
+                Object.defineProperty(window, 'onvisibilitychange', {
+                    get: function() { return null; },
+                    set: function() {},
+                    configurable: true
+                });
+            } catch(e) {}
+        }
+
+        if (typeof EventTarget !== 'undefined') {
+            const origAEL = EventTarget.prototype.addEventListener;
+            EventTarget.prototype.addEventListener = function(type, listener, options) {
+                if (type === 'visibilitychange' || type === 'webkitvisibilitychange') {
+                    return;
+                }
+                return origAEL.call(this, type, listener, options);
+            };
+        }
+
+        ['click', 'keydown', 'pointerdown'].forEach(function(evt) {
+            window.addEventListener(evt, function() {
+                try {
+                    document.querySelectorAll('video').forEach(function(v) {
+                        if (v.muted) v.muted = false;
+                    });
+                } catch(e) {}
+            }, { capture: true, passive: true });
+        });
+    } catch(e) {}
+})();
+"""
+
 AUTH_DOMAINS = (
     "accounts.google.com",
     "appleid.apple.com",
@@ -481,6 +547,14 @@ class Web2GtkWindow(Adw.ApplicationWindow):
                 injection_time=WebKit.UserScriptInjectionTime.START
             )
             self.user_content_manager.add_script(audio_cleanup_script)
+
+        # Ensure background playback and prevent web apps from pausing when window is unfocused/obscured
+        bg_script = WebKit.UserScript(
+            source=BACKGROUND_PLAYBACK_SCRIPT,
+            injected_frames=WebKit.UserContentInjectedFrames.ALL_FRAMES,
+            injection_time=WebKit.UserScriptInjectionTime.START
+        )
+        self.user_content_manager.add_script(bg_script)
 
         # Ensure keyboard focus is on web_view when window becomes active
         self.connect("notify::is-active", self.on_window_active_changed)
