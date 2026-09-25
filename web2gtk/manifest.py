@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from typing import Dict, Any, List, Optional
 
 CONFIG_BASE = os.path.expanduser("~/.config/web2gtk")
@@ -43,6 +43,7 @@ class AppManifest:
     persistent_storage: bool = True
     system_tray: bool = True
     adblock: bool = True
+    hardware_media_only: bool = True
     window: Dict[str, Any] = field(default_factory=lambda: {"width": 1080, "height": 800, "is_maximized": False})
 
     def __post_init__(self):
@@ -103,7 +104,9 @@ class AppManifest:
 
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return cls(**data)
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        return cls(**filtered)
 
     @classmethod
     def list_all(cls) -> List["AppManifest"]:

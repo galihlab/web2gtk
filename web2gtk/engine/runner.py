@@ -12,6 +12,10 @@ try:
 except Exception:
     pass
 
+# Optimize GPU hardware acceleration & media pipeline for Linux
+os.environ.setdefault("GST_VAAPI_ALL_DRIVERS", "1")
+os.environ.setdefault("WEBKIT_FORCE_COMPOSITING_MODE", "1")
+
 import gi
 
 gi.require_version('Gtk', '4.0')

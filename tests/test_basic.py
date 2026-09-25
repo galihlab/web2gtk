@@ -18,6 +18,26 @@ class TestWeb2Gtk(unittest.TestCase):
         self.assertTrue(m.persistent_storage)
         self.assertTrue(m.system_tray)
         self.assertTrue(m.adblock)
+        self.assertTrue(m.hardware_media_only)
+
+    def test_manifest_load_robustness(self):
+        import tempfile
+        import json
+        with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as f:
+            json.dump({
+                "name": "Dummy App",
+                "url": "https://example.org",
+                "unknown_legacy_field": 12345
+            }, f)
+            tmp_path = f.name
+
+        try:
+            m = AppManifest.load(tmp_path)
+            self.assertEqual(m.name, "Dummy App")
+            self.assertTrue(m.hardware_media_only)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     def test_install_and_uninstall(self):
         m = AppManifest(name="Mock Unit Test", url="https://example.com", slug="mock-test-gtk")
