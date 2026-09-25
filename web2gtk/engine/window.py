@@ -432,6 +432,10 @@ class Web2GtkWindow(Adw.ApplicationWindow):
             self.settings.set_user_agent(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
             )
+        elif "tiktok.com" in (self.manifest.url or "").lower():
+            self.settings.set_user_agent(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+            )
         else:
             self.settings.set_user_agent(self.manifest.user_agent)
         self.settings.set_enable_developer_extras(True)
@@ -453,10 +457,6 @@ class Web2GtkWindow(Adw.ApplicationWindow):
         self.settings.set_enable_media_capabilities(True)
         self.settings.set_media_playback_allows_inline(True)
         self.settings.set_media_playback_requires_user_gesture(False)
-
-        # Enforce hardware-accelerated media decoding to avoid CPU software decoding fallbacks (e.g. libdav1d AV1)
-        if getattr(self.manifest, "hardware_media_only", True):
-            self.settings.set_media_content_types_requiring_hardware_support("video/*")
 
         # User Content Manager
         self.user_content_manager = WebKit.UserContentManager()
@@ -482,11 +482,8 @@ class Web2GtkWindow(Adw.ApplicationWindow):
             )
             self.user_content_manager.add_script(audio_cleanup_script)
 
-        # Ensure keyboard focus and handle background visibility/suspension
+        # Ensure keyboard focus is on web_view when window becomes active
         self.connect("notify::is-active", self.on_window_active_changed)
-        self.connect("notify::visible", self.on_window_visibility_changed)
-        if hasattr(self.props, "suspended"):
-            self.connect("notify::suspended", self.on_window_suspended_changed)
 
         # Main Layout
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -761,60 +758,6 @@ class Web2GtkWindow(Adw.ApplicationWindow):
             self.web_view.grab_focus()
             if hasattr(self, "tray") and self.tray:
                 self.tray.set_attention(False)
-
-    def pause_media(self):
-        try:
-            if hasattr(self, "web_view") and self.web_view:
-                self.web_view.evaluate_javascript(
-                    """
-                    (function() {
-                        try {
-                            document.querySelectorAll('video').forEach(function(v) {
-                                if (!v.paused) {
-                                    v._web2gtk_paused = true;
-                                    v.pause();
-                                }
-                            });
-                        } catch(e) {}
-                    })();
-                    """,
-                    -1, None, None, None, None, None
-                )
-        except Exception:
-            pass
-
-    def resume_media(self):
-        try:
-            if hasattr(self, "web_view") and self.web_view:
-                self.web_view.evaluate_javascript(
-                    """
-                    (function() {
-                        try {
-                            document.querySelectorAll('video').forEach(function(v) {
-                                if (v._web2gtk_paused) {
-                                    v._web2gtk_paused = false;
-                                    v.play().catch(function(){});
-                                }
-                            });
-                        } catch(e) {}
-                    })();
-                    """,
-                    -1, None, None, None, None, None
-                )
-        except Exception:
-            pass
-
-    def on_window_visibility_changed(self, *_):
-        if not self.get_visible():
-            self.pause_media()
-        else:
-            self.resume_media()
-
-    def on_window_suspended_changed(self, *_):
-        if hasattr(self.props, "suspended") and self.props.suspended:
-            self.pause_media()
-        else:
-            self.resume_media()
 
     def on_show_notification(self, web_view, notification):
         title = notification.get_title() or self.manifest.name

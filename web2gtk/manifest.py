@@ -59,10 +59,12 @@ class AppManifest:
         if not self.icon:
             self.icon = self.slug
 
-        # Ensure YouTube and ChatGPT use Safari UA to bypass Chrome BotGuard and Cloudflare Turnstile
+        # Ensure YouTube, ChatGPT, and TikTok use Safari UA for BotGuard bypass and hardware media streams
         if "youtube.com" in (self.url or "").lower():
             self.user_agent = YOUTUBE_USER_AGENT
         elif "chatgpt.com" in (self.url or "").lower() or "openai.com" in (self.url or "").lower():
+            self.user_agent = SAFARI_MAC_USER_AGENT
+        elif "tiktok.com" in (self.url or "").lower():
             self.user_agent = SAFARI_MAC_USER_AGENT
         elif not self.user_agent or "Version/18.0 Safari" in self.user_agent or "Version/60.5 Safari" in self.user_agent:
             self.user_agent = DEFAULT_USER_AGENT
