@@ -59,28 +59,43 @@ tp-yt-iron-overlay-backdrop[opened] {
 # - Zero MutationObserver loops to guarantee 0% CPU and zero memory leak
 YOUTUBE_ADBLOCK_SCRIPT = """
 (function() {
-    // 1. Strip ad placements from initial payload and SPA player fetch requests
-    const AD_KEYS = [
-        'adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams',
-        'auxiliaryUi', 'promotedSparklesWebRenderer', 'promotedVideoRenderer',
-        'compactPromotedVideoRenderer', 'compactPromotedItemRenderer'
-    ];
+    // 1. Strip ad placements from the player payload.
+    //    Key set deliberately mirrors uBlock Origin's youtube.com quick-fixes
+    //    (adPlacements / adSlots / playerAds). Pruning anything beyond that --
+    //    notably adBreakHeartbeatParams, auxiliaryUi and the promoted* renderers --
+    //    makes YouTube's anti-adblock trip and the player dies with error 282054944.
+    const AD_KEYS = ['adPlacements', 'playerAds', 'adSlots', 'legacyImportant'];
+
+    function pruneKeys(obj, keys) {
+        if (!obj || typeof obj !== 'object') return;
+        for (let i = 0; i < keys.length; i++) {
+            try { delete obj[keys[i]]; } catch (e) {}
+        }
+    }
 
     function pruneAds(obj) {
         if (!obj || typeof obj !== 'object') return obj;
-        for (let i = 0; i < AD_KEYS.length; i++) {
-            delete obj[AD_KEYS[i]];
-        }
+        pruneKeys(obj, AD_KEYS);
         if (obj.playerResponse && typeof obj.playerResponse === 'object') {
-            for (let i = 0; i < AD_KEYS.length; i++) {
-                delete obj.playerResponse[AD_KEYS[i]];
+            pruneKeys(obj.playerResponse, AD_KEYS);
+        }
+        // Shorts / feed ads travel inside /next payloads
+        if (Array.isArray(obj.entries)) {
+            for (let i = 0; i < obj.entries.length; i++) {
+                const ep = obj.entries[i] && obj.entries[i].command && obj.entries[i].command.reelWatchEndpoint;
+                if (ep && ep.adClientParams) { try { delete ep.adClientParams.isAd; } catch (e) {} }
             }
         }
         return obj;
     }
 
+    function isInnerTube(url) {
+        return typeof url === 'string' &&
+            (url.indexOf('/youtubei/v1/player') !== -1 || url.indexOf('/youtubei/v1/next') !== -1);
+    }
+
     try {
-        // Hook JSON.parse to prune ad placements from all API & XHR responses (including InnerTube)
+        // Hook JSON.parse to prune ad placements from payloads decoded in-page
         const origParse = JSON.parse;
         JSON.parse = function(...args) {
             const res = origParse.apply(this, args);
@@ -97,16 +112,15 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             }
         });
 
+        // YouTube serves /player over fetch in some builds
         if (window.fetch) {
             const origFetch = window.fetch;
             window.fetch = async function(...args) {
                 const response = await origFetch.apply(this, args);
                 try {
                     const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
-                    if (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next')) {
-                        const clone = response.clone();
-                        const data = await clone.json();
-                        pruneAds(data);
+                    if (isInnerTube(url)) {
+                        const data = pruneAds(await response.clone().json());
                         return new Response(JSON.stringify(data), {
                             status: response.status,
                             statusText: response.statusText,
@@ -116,6 +130,42 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                 } catch(e) {}
                 return response;
             };
+        }
+
+        // ...and over XMLHttpRequest in others (this is why ads leaked before:
+        // only fetch was hooked, so the /player payload went through untouched)
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this.__web2gtkUrl = url;
+            return origOpen.apply(this, arguments);
+        };
+
+        const textDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText');
+        if (textDesc && textDesc.get) {
+            Object.defineProperty(XMLHttpRequest.prototype, 'responseText', {
+                configurable: true,
+                get: function() {
+                    const raw = textDesc.get.call(this);
+                    if (isInnerTube(this.__web2gtkUrl) && typeof raw === 'string' && raw.length > 1) {
+                        try { return JSON.stringify(pruneAds(JSON.parse(raw))); } catch(e) { return raw; }
+                    }
+                    return raw;
+                }
+            });
+        }
+
+        const respDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'response');
+        if (respDesc && respDesc.get) {
+            Object.defineProperty(XMLHttpRequest.prototype, 'response', {
+                configurable: true,
+                get: function() {
+                    const raw = respDesc.get.call(this);
+                    if (isInnerTube(this.__web2gtkUrl) && raw && typeof raw === 'object') {
+                        return pruneAds(raw);
+                    }
+                    return raw;
+                }
+            });
         }
     } catch(e) {}
 
