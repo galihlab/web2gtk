@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/galihlab/web2gtk/actions"><img src="https://github.com/galihlab/web2gtk/actions/workflows/ci.yml/badge.svg" alt="CI / CD"></a>
+  <a href="https://github.com/galyarderlabs/web2gtk/actions"><img src="https://github.com/galyarderlabs/web2gtk/actions/workflows/ci.yml/badge.svg" alt="CI / CD"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
@@ -73,13 +73,13 @@ sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 libdbusmenu-gtk3 p
 Run the remote installer via `curl`:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/galyarderlabs/web2gtk/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/galihlab/web2gtk/main/install.sh | bash
 ```
 
 ### Or Clone & Install Locally
 
 ```bash
-git clone https://github.com/galihlab/web2gtk.git
+git clone https://github.com/galyarderlabs/web2gtk.git
 cd web2gtk
 ./install.sh
 ```
