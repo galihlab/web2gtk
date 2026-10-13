@@ -9,7 +9,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned on purpose: gir1.2-webkit-6.0 (WebKitGTK 6.0 typelibs) only exists
+    # on Ubuntu 24.04+, and ubuntu-latest drifting between images must not
+    # silently break this job.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -23,21 +26,27 @@ jobs:
             gir1.2-adw-1 \
             gir1.2-webkit-6.0 \
             gir1.2-dbusmenu-glib-0.4 \
-            librsvg2-bin
+            librsvg2-bin \
+            python3-venv
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
+      # No actions/setup-python on purpose. The apt packages above install
+      # PyGObject into the SYSTEM interpreter's dist-packages; an interpreter
+      # from setup-python cannot see /usr/lib/python3/dist-packages, which is
+      # what produced "ModuleNotFoundError: No module named 'gi'".
+      # A venv built with --system-site-packages inherits the system gi.
       - name: Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install Pillow requests beautifulsoup4
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install Pillow requests beautifulsoup4
+
+      - name: Verify GTK stack is importable
+        run: |
+          .venv/bin/python -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1'); gi.require_version('WebKit','6.0'); gi.require_version('Dbusmenu','0.4'); from gi.repository import Gtk, Adw, WebKit; print('GTK %s.%s / WebKit %s.%s OK' % (Gtk.get_major_version(), Gtk.get_minor_version(), WebKit.get_major_version(), WebKit.get_minor_version()))"
 
       - name: Run Tests
         run: |
-          python -m unittest discover tests
+          .venv/bin/python -m unittest discover tests -v
 
   release:
     needs: test
