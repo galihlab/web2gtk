@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/galyarderlabs/web2gtk.git"
-TARBALL_URL="https://github.com/galyarderlabs/web2gtk/archive/refs/heads/main.tar.gz"
+REPO_URL="https://github.com/galihlab/web2gtk.git"
+TARBALL_URL="https://github.com/galihlab/web2gtk/archive/refs/heads/main.tar.gz"
 INSTALL_DIR="$HOME/.local/share/web2gtk"
 BIN_DIR="$HOME/.local/bin"
 
